@@ -1,0 +1,44 @@
+name: Build plugin
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Engine tests
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Ad-hoc sign (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          for b in build/ChordGen_artefacts/Release/VST3/*.vst3 \
+                   build/ChordGen_artefacts/Release/AU/*.component \
+                   build/ChordGen_artefacts/Release/Standalone/*.app; do
+            codesign --force --deep -s - "$b"
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ChordProgressionGenerator-${{ runner.os }}
+          path: |
+            build/ChordGen_artefacts/Release/VST3
+            build/ChordGen_artefacts/Release/AU
+            build/ChordGen_artefacts/Release/Standalone
